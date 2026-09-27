@@ -1,125 +1,157 @@
-# Key Findings
+# Methodology
 
-## Dataset Coverage
+## Overview
 
-The processed weekly dataset contained:
+This project used an end-to-end analytical workflow to evaluate salmon-louse monitoring data from Norwegian aquaculture localities.
 
-- **55,718 total weekly observations**
-- **30,297 observations with valid compliance classification**
-- **1,066 regulatory breaches**
+The workflow combined Python-based preprocessing and feature engineering with PostgreSQL for structured storage and SQL analysis, followed by Grafana for interactive visualization.
 
-The resulting overall breach rate among valid observations was approximately:
+## 1. Data Preparation
 
-**3.52%**
+Raw weekly fish-health data were imported into Python and inspected for:
 
-## Lice Pressure and Compliance
+- missing values
+- inconsistent column names
+- data types
+- regulatory-limit fields
+- locality identifiers
+- lice-count availability
+- sea-temperature availability
 
-Most valid weekly observations remained within the applicable lice limit, while a smaller subset of observations represented clear regulatory breaches.
+Columns were standardized and converted into analysis-ready formats.
 
-Localities differed substantially in:
+## 2. Compliance Analysis
 
-- mean adult female lice levels
-- maximum observed lice levels
-- number of breach weeks
-- breach rate
+The weekly regulatory lice limit was converted into a numeric field:
 
-This justified using both absolute breach counts and normalized locality-level breach rates.
+`weekly_lice_limit_numeric`
 
-## Temperature Association
+Compliance was represented using:
 
-Cleaned sea temperature showed a modest positive relationship with adult female lice levels.
+`compliance_code`
 
-The correlation between cleaned sea temperature and adult female lice was approximately:
+where:
 
-**r = 0.148**
+- `0` = valid observation below or at the applicable limit
+- `1` = observation above the applicable limit
+- `NULL` = compliance could not be evaluated from the available data
 
-Weeks preceding a future breach occurred under warmer average conditions than weeks not followed by a breach.
+The overall breach rate was calculated using only observations with a valid compliance classification.
 
-Average current temperature was approximately:
+## 3. Feature Engineering
 
-- **9.63°C** for observations not followed by a breach
-- **11.98°C** for observations followed by a breach
+Temporal and decision-support features were generated at locality level.
 
-The 3-week temperature mean showed a similar pattern.
+These included:
 
-These results indicate an association between sustained warmer conditions and increased breach risk, but they do not establish causation.
+- `adult_female_lice_lag_1`
+- `adult_female_lice_lag_2`
+- `adult_female_lice_change`
+- `adult_female_lice_change_2w`
+- `adult_female_lice_mean_3w`
+- `distance_to_limit`
+- `ratio_to_limit`
+- `previous_breach`
+- `future_breach`
 
-## Early-Warning Rule
+These variables were designed to capture current lice pressure, recent change, and proximity to the regulatory threshold.
 
-A simple warning rule combined:
+## 4. Temperature Processing
 
-- `ratio_to_limit >= 0.80`
-- positive lice change
-- current compliance
+Sea-temperature observations were inspected for missing and implausible values.
 
-Observations classified as `Watch` had a substantially higher next-week breach rate than observations classified as `Normal`.
+The original temperature field was retained and a cleaned analytical variable was generated:
 
-Approximate future breach rates were:
+`sea_temperature_clean`
 
-- **1.46%** for Normal observations
-- **12.05%** for Watch observations
+Additional temperature features included:
 
-The Watch category captured approximately **38.8%** of subsequent breaches, while many future breaches remained outside this simple warning rule.
+- previous-week temperature
+- weekly temperature change
+- 3-week rolling mean temperature
 
-This demonstrates useful signal, but also shows that the rule should not be considered a complete predictive system.
+Temperature was then compared with adult female lice levels and future breach status.
 
-## Exploratory Risk Score
+## 5. Warning and Risk Analysis
 
-An exploratory score combining:
+A simple warning rule was developed using:
+
+- proximity to the weekly lice limit
+- positive lice growth
+- current compliance status
+
+An exploratory risk score was also generated using percentile-ranked indicators of:
 
 - lice pressure
-- positive recent lice growth
+- recent lice growth
 - recent temperature
 
-produced a clear gradient across risk quartiles.
+The score was divided into quartiles for comparison of subsequent breach rates.
 
-Observed future breach rates were approximately:
+This score is an exploratory decision-support indicator and should not be interpreted as a validated predictive model.
 
-- **Q1 Low:** 0.08%
-- **Q2:** 0.57%
-- **Q3:** 2.28%
-- **Q4 High:** 6.41%
+## 6. Locality Benchmarking
 
-The highest-risk quartile therefore contained substantially more future breaches than the lowest-risk quartile.
+Locality-level summary metrics were calculated, including:
 
-This result supports the value of combining biological pressure, temporal change, and environmental context.
+- valid observations
+- mean adult female lice
+- maximum adult female lice
+- breach rate
+- warning rate
+- mean temperature
+- mean ratio to limit
+- mean exploratory risk score
+- number of high-risk weeks
 
-However, the score was developed for exploratory decision support and was not externally validated.
+These metrics were exported to a locality benchmarking dataset.
 
-## Locality Benchmarking
+## 7. PostgreSQL Integration
 
-Locality-level benchmarking revealed substantial variation in:
+Processed analytical datasets were imported into PostgreSQL.
 
-- breach frequency
-- mean lice pressure
-- warning frequency
-- temperature exposure
-- exploratory risk score
+The main analytical tables were:
 
-These metrics can be used to distinguish localities with repeated compliance problems from those with only occasional high values.
+- `weekly_features`
+- `locality_benchmark`
 
-## Operational Interpretation
+SQL was used to validate:
 
-The most useful monitoring variables were:
+- row counts
+- duplicate locality-week combinations
+- time ranges
+- breach counts
+- valid observations
+- breach rates
 
-- adult female lice
-- weekly regulatory limit
-- ratio to limit
-- recent lice change
-- temperature trend
-- warning status
-- breach history
+A Grafana-oriented SQL view was also created for locality-level monitoring.
 
-Together, these variables provide a more informative operational view than any single lice measurement alone.
+## 8. Grafana Dashboard
 
-## Overall Conclusion
+Grafana was connected to PostgreSQL through a read-only database user.
 
-The project demonstrates that routinely reported fish-health data can be transformed into a structured monitoring workflow that supports:
+The final dashboard included:
 
-- regulatory-compliance tracking
+- total weekly observations
+- total weekly breaches
+- valid lice observations
+- adult female lice versus weekly limit
+- sea-temperature trends
+- warning history
+- top localities by breach count
 - locality benchmarking
-- early-warning analysis
-- environmental context
-- interactive operational visualization
+- interactive locality selection
 
-The resulting PostgreSQL and Grafana workflow provides a practical prototype for aquaculture fish-health decision support.
+## Reproducibility
+
+The repository contains:
+
+- Jupyter notebooks for data preparation and analysis
+- processed datasets
+- PostgreSQL schema and validation queries
+- Grafana dashboard export
+- dashboard screenshots
+- supporting documentation
+
+This structure allows the analytical workflow to be reviewed and reproduced from preprocessing through visualization.
+
